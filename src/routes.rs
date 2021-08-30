@@ -309,8 +309,8 @@ pub async fn delete_documents(
     let index: LeasedIndex = get_index_or_reject!(engine, index_name.as_str());
     
     let mut bulk_terms = check_json!(bulk_terms);
-    for terms in bulk_terms.iter_mut() {
-        for (field, term) in terms.0.drain() {
+    for terms in bulk_terms.0.iter_mut() {
+        for (field, term) in terms.drain() {
             let term = check_error!(index.get_term(&field, term), "get term");
             check_error!(
                 index.delete_documents_with_term(term).await,
