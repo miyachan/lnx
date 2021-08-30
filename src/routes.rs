@@ -302,20 +302,21 @@ pub async fn get_document(
 /// Deletes any documents matching the set of given terms.
 pub async fn delete_documents(
     index_name: Result<Path<String>, PathParamsRejection>,
-    terms: Result<extract::Json<HashMap<String, DocumentValue>>, JsonRejection>,
+    bulk_terms: Result<extract::Json<Vec<HashMap<String, DocumentValue>>>, JsonRejection>,
     Extension(engine): Extension<SharedEngine>,
 ) -> Response<Body> {
     let index_name = check_path!(index_name);
-    let mut terms = check_json!(terms);
-
     let index: LeasedIndex = get_index_or_reject!(engine, index_name.as_str());
-
-    for (field, term) in terms.0.drain() {
-        let term = check_error!(index.get_term(&field, term), "get term");
-        check_error!(
-            index.delete_documents_with_term(term).await,
-            "delete documents with term"
-        );
+    
+    let mut bulk_terms = check_json!(bulk_terms);
+    for terms in bulk_terms.iter() {
+        for (field, term) in terms.0.drain() {
+            let term = check_error!(index.get_term(&field, term), "get term");
+            check_error!(
+                index.delete_documents_with_term(term).await,
+                "delete documents with term"
+            );
+        }
     }
 
     json_response(StatusCode::OK, "deleted any document matching term")
