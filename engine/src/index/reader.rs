@@ -17,6 +17,8 @@ use tantivy::query::{
 use tantivy::schema::{Field, FieldType, IndexRecordOption, NamedFieldDocument, Schema, Value};
 use tantivy::{DocAddress, Executor, IndexReader, LeasedItem, Score, Searcher, Term};
 use tokio::sync::{oneshot, Semaphore};
+use hashbrown::HashMap;
+
 
 use crate::correction::{self, correct_sentence};
 use crate::structures::{QueryMode, QueryPayload};
@@ -48,6 +50,12 @@ macro_rules! try_get_doc {
 
         res[0].1
     }};
+}
+
+#[derive(Debug)]
+enum Either<A, B> {
+    Left(A),
+    Right(B),
 }
 
 /// A async manager around the tantivy index reader.
@@ -257,9 +265,14 @@ impl IndexReaderHandler {
             };
 
             let query = match parse_query(
+                searcher.index(),
                 parser,
                 search_fields,
-                payload.query,
+                match (payload.query.is_some(), payload.map.is_empty()) {
+                    (true, _) => Some(Either::Left(payload.query.unwrap())),
+                    (_, false) => Some(Either::Right(payload.map)),
+                    _ => None
+                },
                 ref_document,
                 payload.mode,
                 use_fast_fuzzy,
@@ -305,9 +318,10 @@ impl IndexReaderHandler {
 /// Generates a query from any of the 3 possible systems to
 /// query documents.
 fn parse_query(
+    index: &tantivy::Index,
     parser: Arc<QueryParser>,
     search_fields: Arc<Vec<(Field, Score)>>,
-    query: Option<String>,
+    query: Option<Either<String, HashMap<String, String>>>,
     ref_document: Option<DocAddress>,
     mode: QueryMode,
     use_fast_fuzzy: bool,
@@ -318,11 +332,31 @@ fn parse_query(
         (QueryMode::Normal, None, _) => Err(Error::msg(
             "query mode was `Normal` but query string is `None`",
         )),
-        (QueryMode::Normal, Some(query), _) => Ok(parser.parse_query(query)?),
+        (QueryMode::Normal, Some(Either::Left(query)), _) => Ok(parser.parse_query(query)?),
+        (QueryMode::Normal, Some(Either::Right(query)), _) => {
+            let queries = query.iter().map(|(field, query)| {
+                let field = match index.schema().get_field(field) {
+                    Some(f) => vec![f],
+                    None => {
+                        return Ok(None)
+                    }
+                };
+
+                let mut parser = QueryParser::for_index(index, field);
+                parser.set_conjunction_by_default();
+                match parser.parse_query(query) {
+                    Ok(q) => Ok(Some(q)),
+                    Err(err) => Err(anyhow::Error::new(err))
+                }
+            })
+            .filter_map(|s| s.transpose())
+            .collect::<Result<Vec<_>, _>>()?;
+            Ok(Box::new(BooleanQuery::intersection(queries)) as Box<dyn Query>)
+        },
         (QueryMode::Fuzzy, None, _) => Err(Error::msg(
             "query mode was `Fuzzy` but query string is `None`",
         )),
-        (QueryMode::Fuzzy, Some(query), _) => {
+        (QueryMode::Fuzzy, Some(Either::Left(query)), _) => {
             let qry = if use_fast_fuzzy {
                 parse_fast_fuzzy_query(query, search_fields, strip_stop_words)?
             } else {
@@ -330,10 +364,14 @@ fn parse_query(
             };
             Ok(qry)
         },
+        (QueryMode::Fuzzy, Some(Either::Right(_)), _) => Err(Error::msg(
+            "query mode was `Fuzzy` but query string is `None`",
+        )),
         (QueryMode::MoreLikeThis, _, None) => Err(Error::msg(
             "query mode was `MoreLikeThis` but reference document is `None`",
         )),
         (QueryMode::MoreLikeThis, _, Some(ref_document)) => Ok(parse_more_like_this(ref_document)?),
+
     };
 
     debug!(

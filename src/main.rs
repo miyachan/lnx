@@ -253,7 +253,8 @@ async fn start(settings: Settings) -> Result<()> {
     let app = Router::new()
         .route(
             "/indexes/:index_name/search",
-            get(routes::search_index.layer(RequireAuthorizationLayer::custom(search_auth))),
+            get(routes::search_index.layer(RequireAuthorizationLayer::custom(search_auth)))
+            .post(routes::search_index_json.layer(RequireAuthorizationLayer::custom(search_auth))),
         )
         .route(
             "/indexes/:index_name/commit",

@@ -264,12 +264,16 @@ impl Default for QueryMode {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct QueryPayload {
+pub struct  QueryPayload {
     /// A query string for `QueryMode::Fuzzy` and `QueryMode::Normal` queries.
     pub(crate) query: Option<String>,
 
     /// A reference document for `QueryMode::MoreLikeThis`.
     pub(crate) document: Option<u64>,
+
+    /// A map of fields to query strings.
+    #[serde(default)]
+    pub map: HashMap<String, String>,
 
     /// The query mode which determines which query system will be
     /// used.

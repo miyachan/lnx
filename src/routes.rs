@@ -13,6 +13,7 @@ use crate::auth::{AuthManager, Permissions};
 use crate::responders::json_response;
 
 type SharedEngine = Arc<SearchEngine>;
+type FieldSearch = HashMap<String, String>;
 
 /// Extracts a leased index or returns a json response
 /// with a 400 status code.
@@ -160,6 +161,23 @@ pub async fn search_index(
 ) -> Response<Body> {
     let query = check_query!(query);
     let index_name = check_path!(index_name);
+
+    let index: LeasedIndex = get_index_or_reject!(engine, index_name.as_str());
+    let results = check_error!(index.search(query.0).await, "search index");
+
+    json_response(StatusCode::OK, &results)
+}
+
+/// Searches an index with a given query.
+pub async fn search_index_json(
+    query: Result<Query<QueryPayload>, QueryRejection>,
+    index_name: Result<Path<String>, PathParamsRejection>,
+    payload: Result<extract::Json<FieldSearch>, JsonRejection>,
+    Extension(engine): Extension<SharedEngine>,
+) -> Response<Body> {
+    let index_name = check_path!(index_name);
+    let mut query = check_query!(query);
+    query.0.map = check_json!(payload).0;
 
     let index: LeasedIndex = get_index_or_reject!(engine, index_name.as_str());
     let results = check_error!(index.search(query.0).await, "search index");

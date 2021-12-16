@@ -14,7 +14,7 @@ fern = { version = "0.6", features = ["colored"] }
 tower-http = { version = "0.1", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
 hashbrown = { version = "0.11", features = ["serde"] }
-axum = { git = "https://github.com/tokio-rs/axum.git", branch = "main" }
+axum = { git = "https://github.com/tokio-rs/axum.git", rev = "0d2db387a88bde5145f0ba746d82cd308738ff91" }
 sqlx = { version = "0.5", features = ["sqlite", "runtime-tokio-rustls"] }
 tower = "0.4"
 structopt = "0.3"
