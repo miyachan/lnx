@@ -100,7 +100,7 @@ fn main() {
         Err(e) => {
             eprintln!("error during server setup: {:?}", e);
             return;
-        },
+        }
     };
 
     let threads = settings.runtime_threads.unwrap_or_else(|| num_cpus::get());
@@ -115,7 +115,7 @@ fn main() {
         Err(e) => {
             error!("error during runtime creation: {:?}", e);
             return;
-        },
+        }
     };
 
     if let Err(e) = result {
@@ -253,8 +253,10 @@ async fn start(settings: Settings) -> Result<()> {
     let app = Router::new()
         .route(
             "/indexes/:index_name/search",
-            get(routes::search_index.layer(RequireAuthorizationLayer::custom(search_auth)))
-            .post(routes::search_index_json.layer(RequireAuthorizationLayer::custom(search_auth))),
+            get(routes::search_index.layer(RequireAuthorizationLayer::custom(search_auth.clone())))
+                .post(
+                    routes::search_index_json.layer(RequireAuthorizationLayer::custom(search_auth)),
+                ),
         )
         .route(
             "/indexes/:index_name/commit",
@@ -356,7 +358,7 @@ fn check_tls_files(settings: &Settings) -> Result<Option<Arc<ServerConfig>>> {
             return Err(Error::msg(
                 "missing a required TLS field, both key and cert must be provided.",
             ))
-        },
+        }
     }
 }
 
